@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Secure Image Steganography</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(to right, #74ebd5, #acb6e5);
+      text-align: center;
+      padding: 40px;
+    }
+    .container {
+      background-color: white;
+      padding: 30px;
+      border-radius: 15px;
+      max-width: 600px;
+      margin: auto;
+      box-shadow: 0px 4px 12px rgba(0,0,0,0.2);
+    }
+    h1 { color: #333; }
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #4fa3d1;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 10px;
+    }
+    button:hover { background-color: #3c8dbc; }
+    canvas { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Secure Image Steganography</h1>
+
+    <h2>Encode Message</h2>
+    <input type="file" id="encodeImage" accept="image/*">
+    <textarea id="secretMessage" placeholder="Enter your message..."></textarea>
+    <input type="password" id="encodePassword" placeholder="Set a password">
+    <button onclick="encode()">Encode & Download</button>
+
+    <h2>Decode Message</h2>
+    <input type="file" id="decodeImage" accept="image/*">
+    <input type="password" id="decodePassword" placeholder="Enter password">
+    <button onclick="decode()">Decode</button>
+    <textarea id="decodedMessage" placeholder="Decoded message will appear here..." readonly></textarea>
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <script>
+    function textToBinary(text) {
+      return text.split('').map(char => char.charCodeAt(0).toString(2).padStart(8, '0')).join('');
+    }
+
+    function binaryToText(bin) {
+      return bin.match(/.{1,8}/g).map(byte => String.fromCharCode(parseInt(byte, 2))).join('');
+    }
+
+    function encode() {
+      const fileInput = document.getElementById('encodeImage').files[0];
+      const message = document.getElementById('secretMessage').value;
+      const password = document.getElementById('encodePassword').value;
+
+      if (!fileInput || !message || !password) {
+        alert("All fields are required!");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.getElementById('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const fullMessage = password + '||' + message;
+          const binary = textToBinary(fullMessage) + '0000000000000000'; // end delimiter
+
+          for (let i = 0; i < binary.length; i++) {
+            imageData.data[i * 4] = (imageData.data[i * 4] & 254) | parseInt(binary[i]);
+          }
+
+          ctx.putImageData(imageData, 0, 0);
+
+          // Clear inputs after encoding
+          document.getElementById('secretMessage').value = '';
+          document.getElementById('encodePassword').value = '';
+
+          // Download encoded image
+          const link = document.createElement('a');
+          link.download = 'encoded_image.png';
+          link.href = canvas.toDataURL();
+          link.click();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(fileInput);
+    }
+
+    function decode() {
+      const fileInput = document.getElementById('decodeImage').files[0];
+      const passwordInput = document.getElementById('decodePassword').value;
+
+      if (!fileInput || !passwordInput) {
+        alert("Please select image and enter password!");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.getElementById('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+          let binary = '';
+          for (let i = 0; i < imageData.data.length; i += 4) {
+            binary += (imageData.data[i] & 1).toString();
+            if (binary.slice(-16) === '0000000000000000') break;
+          }
+
+          const decoded = binaryToText(binary.slice(0, -16));
+          const [storedPassword, ...messageParts] = decoded.split('||');
+          if (storedPassword === passwordInput) {
+            document.getElementById('decodedMessage').value = messageParts.join('||');
+          } else {
+            alert("Incorrect password.");
+            document.getElementById('decodedMessage').value = "";
+          }
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(fileInput);
+    }
+  </script>
+</body>
+</html>
